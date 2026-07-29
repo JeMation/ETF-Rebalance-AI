@@ -1,0 +1,151 @@
+/* =====================================================
+   ETF Rebalance AI
+   Financial Dashboard Theme
+===================================================== */
+
+/* ---------- Global ---------- */
+
+body {
+    background-color: #f4f7fb;
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #2c3e50;
+}
+
+/* ---------- Navbar ---------- */
+
+.navbar {
+    background: linear-gradient(90deg, #0d6efd, #0b5ed7);
+}
+
+.navbar-brand {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+/* ---------- Card ---------- */
+
+.card {
+    border: none;
+    border-radius: 14px;
+    transition: all .25s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .12);
+}
+
+.card-header {
+    background: white;
+    border-bottom: 1px solid #edf0f5;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+/* ---------- KPI ---------- */
+
+.card-body h6 {
+    color: #7b8a9a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.card-body h2 {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+/* ---------- Tables ---------- */
+
+.table {
+    margin-bottom: 0;
+    vertical-align: middle;
+}
+
+.table thead {
+    background: #f8f9fb;
+}
+
+.table thead th {
+    border-bottom: 2px solid #dee2e6;
+    color: #495057;
+    font-size: 14px;
+}
+
+.table tbody td {
+    font-size: 14px;
+}
+
+.table-hover tbody tr:hover {
+    background: #eef5ff;
+}
+
+/* ---------- Recommendation Colors ---------- */
+
+.text-buy {
+    color: #198754;
+    font-weight: bold;
+}
+
+.text-hold {
+    color: #fd7e14;
+    font-weight: bold;
+}
+
+.text-sell {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* ---------- Chart ---------- */
+
+#portfolioChart {
+    width: 100%;
+    height: 400px;
+}
+
+/* ---------- Sections ---------- */
+
+.row {
+    margin-bottom: 10px;
+}
+
+/* ---------- Shadow ---------- */
+
+.shadow-sm {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .08) !important;
+}
+
+/* ---------- Footer Space ---------- */
+
+.mb-5 {
+    padding-bottom: 30px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 992px) {
+
+    .card-body h2 {
+        font-size: 1.6rem;
+    }
+
+    .navbar-brand {
+        font-size: 1.2rem;
+    }
+
+}
+
+@media (max-width: 768px) {
+
+    .card {
+        margin-bottom: 20px;
+    }
+
+    .table {
+        font-size: 13px;
+    }
+
+}
