@@ -1,17 +1,13 @@
 # ==========================================
 # ETF Rebalance AI
-# Market Data Loader V4
+# Market Data Loader V5
 #
 # SPMO + PLUS 고배당주
 #
 # SPMO       -> yfinance
 # PLUS 고배당주 -> pykrx
 #
-# 최근 1년
-# N 거래일 변동률
-# 변동률 차이
-# 절대값
-# Viewer 호환 price_data
+# SQLite 증분 저장
 # ==========================================
 
 import yfinance as yf
@@ -20,6 +16,8 @@ import pandas as pd
 from pykrx import stock
 
 from datetime import datetime, timedelta
+import sqlite3
+import os
 
 
 # ==========================================
@@ -29,67 +27,146 @@ from datetime import datetime, timedelta
 SPMO_TICKER = "SPMO"
 
 # PLUS 고배당주
-# 한국거래소 종목코드
 PULS_TICKER = "161510"
 
 
 # ==========================================
-# 가격 데이터
+# SQLite 설정
 # ==========================================
 
-def get_price_data(
-    analysis_years=1,
-    comparison_days=30
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+DB_PATH = os.path.join(
+    BASE_DIR,
+    "market_data.db"
+)
+
+
+# ==========================================
+# SQLite 초기화
+# ==========================================
+
+def init_database():
+
+    conn = sqlite3.connect(DB_PATH)
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS market_prices (
+            date TEXT PRIMARY KEY,
+            SPMO REAL,
+            PULS REAL
+        )
+    """)
+
+    conn.commit()
+
+    conn.close()
+
+
+# ==========================================
+# SQLite 저장 데이터 불러오기
+# ==========================================
+
+def load_cached_data():
+
+    init_database()
+
+    conn = sqlite3.connect(DB_PATH)
+
+    data = pd.read_sql_query(
+        """
+        SELECT date, SPMO, PULS
+        FROM market_prices
+        ORDER BY date
+        """,
+        conn
+    )
+
+    conn.close()
+
+    if data.empty:
+        return pd.DataFrame(
+            columns=["SPMO", "PULS"]
+        )
+
+    data["date"] = pd.to_datetime(
+        data["date"]
+    )
+
+    data = data.set_index("date")
+
+    data["SPMO"] = pd.to_numeric(
+        data["SPMO"],
+        errors="coerce"
+    )
+
+    data["PULS"] = pd.to_numeric(
+        data["PULS"],
+        errors="coerce"
+    )
+
+    return data
+
+
+# ==========================================
+# SQLite 저장
+# ==========================================
+
+def save_data(data):
+
+    if data is None or data.empty:
+        return
+
+    init_database()
+
+    conn = sqlite3.connect(DB_PATH)
+
+    save_data = data.copy()
+
+    save_data.index = pd.to_datetime(
+        save_data.index
+    )
+
+    # 날짜를 명시적으로 컬럼으로 생성
+    save_data.index.name = "date"
+
+    save_data = save_data.reset_index()
+
+    save_data["date"] = (
+        pd.to_datetime(
+            save_data["date"]
+        )
+        .dt.strftime("%Y-%m-%d")
+    )
+
+    save_data.to_sql(
+        "market_prices",
+        conn,
+        if_exists="append",
+        index=False
+    )
+
+    conn.close()
+
+
+# ==========================================
+# SPMO 신규 데이터
+# ==========================================
+
+def get_spmo_new_data(
+    start_date,
+    end_date
 ):
 
     print(
-        "시장 데이터를 가져오는 중..."
+        f"SPMO 신규 데이터 요청: "
+        f"{start_date.strftime('%Y-%m-%d')} ~ "
+        f"{end_date.strftime('%Y-%m-%d')}"
     )
-
-    # --------------------------------------
-    # 데이터 조회 기간
-    #
-    # 최근 1년 분석을 하더라도
-    # N 거래일 전 가격이 필요하므로
-    # 비교기간만큼 과거 데이터를 추가 확보
-    # --------------------------------------
-
-    today = datetime.now()
-
-    start_date = (
-        today
-        -
-        timedelta(
-            days=(
-                analysis_years * 365
-                +
-                comparison_days
-                +
-                30
-            )
-        )
-    )
-
-    end_date = (
-        today
-        +
-        timedelta(days=1)
-    )
-
-    # 날짜 문자열
-    start_str = start_date.strftime(
-        "%Y%m%d"
-    )
-
-    end_str = today.strftime(
-        "%Y%m%d"
-    )
-
-    # --------------------------------------
-    # SPMO
-    #
-    # yfinance 사용
-    # --------------------------------------
 
     spmo = yf.download(
 
@@ -105,17 +182,14 @@ def get_price_data(
     )
 
     if spmo.empty:
-
-        raise Exception(
-            "SPMO 데이터를 가져오지 못했습니다."
+        return pd.Series(
+            dtype=float,
+            name="SPMO"
         )
 
     spmo_close = spmo["Close"]
 
-    # --------------------------------------
     # yfinance MultiIndex 대응
-    # --------------------------------------
-
     if isinstance(
         spmo_close,
         pd.DataFrame
@@ -136,13 +210,31 @@ def get_price_data(
 
     spmo_close.name = "SPMO"
 
-    # --------------------------------------
-    # PLUS 고배당주
-    #
-    # pykrx 사용
-    #
-    # 종목코드 161510
-    # --------------------------------------
+    return spmo_close.dropna()
+
+
+# ==========================================
+# PULS 신규 데이터
+# ==========================================
+
+def get_puls_new_data(
+    start_date,
+    end_date
+):
+
+    print(
+        f"PULS 신규 데이터 요청: "
+        f"{start_date.strftime('%Y-%m-%d')} ~ "
+        f"{end_date.strftime('%Y-%m-%d')}"
+    )
+
+    start_str = start_date.strftime(
+        "%Y%m%d"
+    )
+
+    end_str = end_date.strftime(
+        "%Y%m%d"
+    )
 
     puls = stock.get_market_ohlcv_by_date(
 
@@ -155,25 +247,14 @@ def get_price_data(
 
     if puls is None or puls.empty:
 
-        raise Exception(
-            "PLUS 고배당주(161510) 데이터를 "
-            "가져오지 못했습니다."
+        return pd.Series(
+            dtype=float,
+            name="PULS"
         )
-
-    # --------------------------------------
-    # pykrx 날짜 정리
-    # --------------------------------------
 
     puls.index = pd.to_datetime(
         puls.index
     )
-
-    # --------------------------------------
-    # pykrx 종가
-    #
-    # pykrx 컬럼:
-    # 시가 / 고가 / 저가 / 종가 / 거래량 ...
-    # --------------------------------------
 
     if "종가" not in puls.columns:
 
@@ -189,70 +270,185 @@ def get_price_data(
         errors="coerce"
     )
 
-    # Viewer와 기존 코드 호환을 위해
-    # 내부 이름은 PULS 유지
-
     puls_close.name = "PULS"
 
+    return puls_close.dropna()
+
+
+# ==========================================
+# 신규 데이터 수집
+# ==========================================
+
+def update_database(
+    analysis_years=1,
+    comparison_days=30
+):
+
+    cached = load_cached_data()
+
+    today = datetime.now()
+
     # --------------------------------------
-    # 두 ETF 가격 데이터 결합
-    #
-    # INNER JOIN을 사용해서
-    # 두 ETF가 모두 거래된 날짜만 사용
-    #
-    # 중요:
-    # SPMO는 미국 거래일
-    # PLUS 고배당주는 한국 거래일
-    #
-    # 따라서 단순 날짜 병합이 아니라
-    # 공통 거래일 기준으로 정렬
+    # 최초 실행
     # --------------------------------------
 
-    data = pd.concat(
+    if cached.empty:
 
+        print(
+            "SQLite에 기존 데이터가 없습니다."
+        )
+
+        start_date = (
+
+            today
+            -
+            timedelta(
+                days=(
+                    analysis_years * 365
+                    +
+                    comparison_days
+                    +
+                    30
+                )
+            )
+
+        )
+
+    else:
+
+        # ----------------------------------
+        # 마지막 저장 날짜 확인
+        # ----------------------------------
+
+        last_date = cached.index.max()
+
+        start_date = (
+            last_date.to_pydatetime()
+            +
+            timedelta(days=1)
+        )
+
+        print(
+            f"SQLite 마지막 데이터: "
+            f"{last_date.strftime('%Y-%m-%d')}"
+        )
+
+    # --------------------------------------
+    # 이미 최신 데이터인 경우
+    # --------------------------------------
+
+    if start_date.date() > today.date():
+
+        print(
+            "새로운 데이터가 없습니다."
+        )
+
+        return cached
+
+    # --------------------------------------
+    # 신규 데이터 요청
+    # --------------------------------------
+
+    spmo_new = get_spmo_new_data(
+        start_date,
+        today + timedelta(days=1)
+    )
+
+    puls_new = get_puls_new_data(
+        start_date,
+        today
+    )
+
+    # --------------------------------------
+    # 신규 데이터 결합
+    # --------------------------------------
+
+    new_data = pd.concat(
         [
-            spmo_close,
-            puls_close
+            spmo_new,
+            puls_new
         ],
+        axis=1
+    )
 
-        axis=1,
-
-        join="inner"
+    new_data.index = pd.to_datetime(
+        new_data.index
     )
 
     # --------------------------------------
-    # 숫자 변환
+    # 기존 데이터와 결합
     # --------------------------------------
 
-    data["SPMO"] = pd.to_numeric(
+    if not new_data.empty:
 
-        data["SPMO"],
+        new_data = new_data[
+            ["SPMO", "PULS"]
+        ]
 
-        errors="coerce"
-    )
+        # ----------------------------------
+        # 기존 데이터에 없는 날짜만 저장
+        # ----------------------------------
 
-    data["PULS"] = pd.to_numeric(
+        if not cached.empty:
 
-        data["PULS"],
+            new_data = new_data[
+                ~new_data.index.isin(
+                    cached.index
+                )
+            ]
 
-        errors="coerce"
+        if not new_data.empty:
+
+            save_data(new_data)
+
+            print(
+                f"SQLite 신규 저장: "
+                f"{len(new_data)}일"
+            )
+
+    # --------------------------------------
+    # 최신 데이터 다시 읽기
+    # --------------------------------------
+
+    return load_cached_data()
+
+
+# ==========================================
+# 가격 데이터
+# ==========================================
+
+def get_price_data(
+    analysis_years=1,
+    comparison_days=30
+):
+
+    print(
+        "시장 데이터를 확인하는 중..."
     )
 
     # --------------------------------------
-    # 결측치 제거
+    # SQLite 업데이트
+    # --------------------------------------
+
+    data = update_database(
+
+        analysis_years=
+            analysis_years,
+
+        comparison_days=
+            comparison_days
+    )
+
+    # --------------------------------------
+    # 두 ETF 모두 존재하는 날짜만 사용
     # --------------------------------------
 
     data = data.dropna(
-
         subset=[
             "SPMO",
             "PULS"
         ]
     )
-
-    # --------------------------------------
-    # 날짜 정렬
-    # --------------------------------------
 
     data.index = pd.to_datetime(
         data.index
@@ -261,7 +457,7 @@ def get_price_data(
     data = data.sort_index()
 
     # --------------------------------------
-    # 데이터 검증
+    # 분석에 필요한 데이터 확인
     # --------------------------------------
 
     if data.empty:
@@ -280,7 +476,8 @@ def get_price_data(
         )
 
     print(
-        f"공통 거래일 데이터: {len(data)}일"
+        f"공통 거래일 데이터: "
+        f"{len(data)}일"
     )
 
     print(
@@ -294,7 +491,7 @@ def get_price_data(
 
 
 # ==========================================
-# 최근 1년 분석 데이터
+# 최근 N년 분석 데이터
 # ==========================================
 
 def build_analysis_data(
@@ -313,13 +510,6 @@ def build_analysis_data(
 
     # --------------------------------------
     # N 거래일 전 가격 기준
-    #
-    # 예:
-    # comparison_days = 30
-    #
-    # 현재 가격 / 30 거래일 전 가격 - 1
-    #
-    # 즉 실제 거래일 기준 30일
     # --------------------------------------
 
     spmo_return = (
@@ -337,7 +527,6 @@ def build_analysis_data(
         1
 
     ) * 100
-
 
     puls_return = (
 
@@ -370,20 +559,16 @@ def build_analysis_data(
     )
 
     # --------------------------------------
-    # 변동률 차이의 절대값
-    #
-    # AI 판단에서
-    # 두 ETF 움직임의 차이 크기를 사용
+    # 절대값
     # --------------------------------------
 
     absolute_difference = (
 
         return_difference
-
     ).abs()
 
     # --------------------------------------
-    # 분석 데이터 생성
+    # 분석 데이터
     # --------------------------------------
 
     analysis = pd.DataFrame({
@@ -403,12 +588,10 @@ def build_analysis_data(
     })
 
     # --------------------------------------
-    # 최근 N년만 사용
+    # 최근 N년
     # --------------------------------------
 
-    latest_date = (
-        data.index.max()
-    )
+    latest_date = data.index.max()
 
     start_date = (
 
@@ -427,14 +610,10 @@ def build_analysis_data(
     ]
 
     # --------------------------------------
-    # 변동률 계산이 불가능한 초기 행 제거
+    # 초기 NaN 제거
     # --------------------------------------
 
     analysis = analysis.dropna()
-
-    # --------------------------------------
-    # 데이터 검증
-    # --------------------------------------
 
     if analysis.empty:
 
@@ -503,7 +682,7 @@ def get_market_analysis(
     )
 
     # --------------------------------------
-    # 최근 N년 분석 데이터
+    # 최근 N년 분석
     # --------------------------------------
 
     analysis_data = build_analysis_data(
@@ -527,7 +706,7 @@ def get_market_analysis(
     )
 
     # --------------------------------------
-    # Viewer 기존 반환 구조 유지
+    # 기존 반환 구조 유지
     # --------------------------------------
 
     return {
