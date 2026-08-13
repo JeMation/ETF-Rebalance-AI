@@ -1,53 +1,105 @@
 // ================================
 // ETF Rebalance AI
-// Portfolio Performance Chart
+// Multi ETF Comparison Chart
 // ================================
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
 
     const ctx = document.getElementById("portfolioChart");
+    const tickerSelect = document.getElementById("tickerSelect");
 
-    if (!ctx) {
-        console.error("portfolioChart를 찾을 수 없습니다.");
-        return;
-    }
+    let chart = null;
 
-    try {
+    async function loadChart() {
 
-        // FastAPI에서 데이터 가져오기
-        const response = await fetch("/api/chart");
-        const chartData = await response.json();
+        // 선택된 ETF 목록
+        const selectedTickers = Array.from(tickerSelect.selectedOptions)
+            .map(option => option.value);
 
-        new Chart(ctx, {
+        if (selectedTickers.length === 0) {
+            return;
+        }
+
+        // API 호출
+        const params = selectedTickers
+            .map(ticker => `tickers=${encodeURIComponent(ticker)}`)
+            .join("&");
+
+        const response = await fetch(`/api/compare?${params}`);
+        const result = await response.json();
+
+        // 첫 번째 ETF의 날짜 사용
+        const labels = result[selectedTickers[0]].labels;
+
+        // 여러 ETF Dataset 생성
+        const datasets = selectedTickers.map(ticker => {
+
+            return {
+
+                label: ticker,
+
+                data: result[ticker].normalized,
+
+                borderWidth: 2,
+
+                tension: 0.35,
+
+                fill: false
+
+            };
+
+        });
+
+        // 기존 차트 삭제
+        if (chart) {
+            chart.destroy();
+        }
+
+        chart = new Chart(ctx, {
 
             type: "line",
 
             data: {
 
-                labels: chartData.labels,
+                labels: labels,
 
-                datasets: [{
+                datasets: datasets
 
-                    label: "QQQ Close Price",
-
-                    data: chartData.values,
-
-                    borderWidth: 3,
-                    tension: 0.35,
-                    fill: true
-
-                }]
             },
 
             options: {
 
                 responsive: true,
+
                 maintainAspectRatio: false,
+
+                interaction: {
+                    mode: "index",
+                    intersect: false
+                },
+
+                plugins: {
+
+                    legend: {
+                        position: "top"
+                    }
+
+                },
 
                 scales: {
 
                     y: {
-                        beginAtZero: false
+
+                        beginAtZero: false,
+
+                        title: {
+
+                            display: true,
+
+                            text: "Performance (%)"
+
+                        }
+
                     }
 
                 }
@@ -56,10 +108,115 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         });
 
-    } catch (error) {
-
-        console.error("차트 데이터를 불러오지 못했습니다.", error);
-
     }
+
+    // 첫 실행
+    loadChart();
+
+    // ETF 선택 변경
+    tickerSelect.addEventListener("change", loadChart);
+
+    const rebalanceBtn = document.getElementById("rebalanceBtn");
+
+if (rebalanceBtn) {
+
+    rebalanceBtn.addEventListener("click", async () => {
+
+        const totalAmount =
+        Number(document.getElementById("totalAmount").value);
+
+        const body = {
+
+            total_amount: totalAmount,
+
+            current: {
+                QQQ: Number(document.getElementById("currentQQQ").value),
+                SPY: Number(document.getElementById("currentSPY").value),
+                SCHD: Number(document.getElementById("currentSCHD").value)
+            },
+
+            target: {
+                QQQ: Number(document.getElementById("targetQQQ").value),
+                SPY: Number(document.getElementById("targetSPY").value),
+                SCHD: Number(document.getElementById("targetSCHD").value)
+            }
+
+        };
+
+        const response = await fetch("/api/rebalance", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify(body)
+
+        });
+
+        const result = await response.json();
+
+        const table = document.getElementById("rebalanceTable");
+
+        table.innerHTML = "";
+
+
+        for (const ticker in result.result) {
+
+            const data = result.result[ticker];
+
+
+            let actionClass = "";
+
+            if (data.action === "BUY") {
+
+                actionClass = "text-success fw-bold";
+
+            } 
+            else if (data.action === "SELL") {
+
+                actionClass = "text-danger fw-bold";
+
+            }
+            else {
+
+                actionClass = "text-secondary fw-bold";
+
+            }
+
+
+            const row = `
+
+            <tr>
+
+                <td>${ticker}</td>
+
+                <td>${data.current}%</td>
+
+                <td>${data.target}%</td>
+
+                <td>${data.difference}%</td>
+
+                <td>
+                    ${data.amount.toLocaleString()}원
+                </td>
+
+                <td class="${actionClass}">
+                    ${data.action}
+                </td>
+
+            </tr>
+
+            `;
+
+
+            table.innerHTML += row;
+
+        }
+
+    });
+
+}
 
 });

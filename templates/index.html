@@ -43,13 +43,28 @@
         </div>
     </nav>
 
-<select id="tickerSelect">
-<option value="QQQ">QQQ</option>
-<option value="SPY">SPY</option>
-<option value="VTI">VTI</option>
-<option value="SCHD">SCHD</option>
-<option value="JEPI">JEPI</option>
-</select>
+<div class="container mt-3">
+    <div class="row">
+        <div class="col-md-4">
+
+            <label class="form-label fw-bold">ETF 선택 (Ctrl 또는 Cmd로 여러 개 선택)</label>
+
+            <select id="tickerSelect" class="form-select" multiple size="8">
+
+                <option value="QQQ" selected>QQQ</option>
+                <option value="SPY">SPY</option>
+                <option value="VTI">VTI</option>
+                <option value="SCHD">SCHD</option>
+                <option value="JEPI">JEPI</option>
+
+                <option value="069500">KODEX 200</option>
+                <option value="161510">ARIRANG 고배당주</option>
+
+            </select>
+
+        </div>
+    </div>
+</div>
 
     <!-- ========================= -->
     <!-- Main Container -->
@@ -235,6 +250,107 @@
             </div>
 
         </div>
+
+        <div class="row mt-4">
+
+        <div class="col-12">
+
+            <div class="card shadow-sm">
+
+                <div class="card-header fw-bold">
+                    Rebalance Calculator
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table">
+
+                        <thead>
+                            <tr>
+                                <th>ETF</th>
+                                <th>Current %</th>
+                                <th>Target %</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            <tr>
+                                <td>QQQ</td>
+                                <td><input id="currentQQQ" type="number" class="form-control" value="50"></td>
+                                <td><input id="targetQQQ" type="number" class="form-control" value="30"></td>
+                            </tr>
+
+                            <tr>
+                                <td>SPY</td>
+                                <td><input id="currentSPY" type="number" class="form-control" value="20"></td>
+                                <td><input id="targetSPY" type="number" class="form-control" value="40"></td>
+                            </tr>
+
+                            <tr>
+                                <td>SCHD</td>
+                                <td><input id="currentSCHD" type="number" class="form-control" value="30"></td>
+                                <td><input id="targetSCHD" type="number" class="form-control" value="30"></td>
+                            </tr>
+
+                        </tbody>
+
+                        <div class="mb-3">
+
+                            <label class="form-label fw-bold">
+                                총 투자금액 (KRW)
+                            </label>
+
+                            <input 
+                                id="totalAmount"
+                                type="number"
+                                class="form-control"
+                                value="10000000">
+
+                        </div>
+
+                    </table>
+
+                    <button id="rebalanceBtn" class="btn btn-primary">
+                        리밸런싱 계산
+                    </button>
+
+                    <hr>
+
+                    <div class="table-responsive">
+
+                        <table class="table table-bordered text-center">
+
+                            <thead class="table-light">
+
+                            <tr>
+                                <th>ETF</th>
+                                <th>Current %</th>
+                                <th>Target %</th>
+                                <th>Difference</th>
+                                <th>Amount</th>
+                                <th>Action</th>
+                            </tr>
+
+                            </thead>
+
+
+                            <tbody id="rebalanceTable">
+
+                            </tbody>
+
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
 
         <!-- Recent Analysis -->
         <div class="row mt-4 mb-5">
